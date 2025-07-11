@@ -2,6 +2,9 @@ import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.sql.*;
 
 class Student
@@ -103,7 +106,7 @@ class Student
         lbldh.setBounds(50,295,150,50);
         p1.add(lbldh);
 
-        String dh[] = {"Select","Dayscholar","Hosteler"};
+        String dh[] = {"Select","Day scholar","Hostler"};
         cbdh = new JComboBox<>(dh);
         cbdh.setFont(new Font("times new roman",Font.PLAIN,20));
         cbdh.setBounds(270,300,300,40);
@@ -176,7 +179,7 @@ class Student
         p1.add(lblftu);
         lblftu.setVisible(false);
 
-        String[] data = {"Select","Register Number","Name","Year","CGPA","Department","Status"};
+        String[] data = {"Select","Name","Year","CGPA","Department","Status"};
         cbdata = new JComboBox<>(data);
         cbdata.setBounds(350,500,300,40);
         cbdata.setFont(new Font("times new roman",Font.PLAIN,20));
@@ -217,17 +220,17 @@ class Student
         {
             Class.forName("com.mysql.cj.jdbc.Driver");
             Connection con = DriverManager.getConnection(url, un, pw);
-            String qry2 = "select * from student";
+            String qry2 = "select * from student_details";
             PreparedStatement pstmt2 = con.prepareStatement(qry2);
             ResultSet rs1 = pstmt2.executeQuery();
 
             while (rs1.next())
             {
-                int drn = rs1.getInt("register_number");
+                int drn = rs1.getInt("reg_no");
                 String dname = rs1.getString("name");
                 String dyear = rs1.getString("year");
                 double dcgpa = rs1.getDouble("cgpa");
-                String ddept = rs1.getString("dept");
+                String ddept = rs1.getString("department");
                 String dstatus = rs1.getString("status");
                 model.addRow(new Object[]{drn, dname, dyear, dcgpa, ddept, dstatus});
             }
@@ -236,30 +239,6 @@ class Student
 
         mainframe.revalidate();
         mainframe.repaint();
-    }
-
-    public void printData()
-    {
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-            Connection con = DriverManager.getConnection(url, un, pw);
-
-            String qry2 = "select * from student";
-            PreparedStatement pstmt2 = con.prepareStatement(qry2);
-            ResultSet rs1 = pstmt2.executeQuery();
-
-            model.setRowCount(0);
-            while (rs1.next()) {
-                int rn = rs1.getInt("register_number");
-                String name = rs1.getString("name");
-                String year = rs1.getString("year");
-                double cgpa = rs1.getDouble("cgpa");
-                String dept = rs1.getString("dept");
-                String status = rs1.getString("status");
-                model.addRow(new Object[]{rn, name, year, cgpa, dept, status});
-            }
-        }
-        catch (Exception ex){}
     }
 
     public boolean isValidDigit(String str)
@@ -286,6 +265,31 @@ class Student
                 return false;
         }
         return true;
+    }
+
+    public void printData(){
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            Connection con = DriverManager.getConnection(url, un, pw);
+
+            String qry2 = "select * from student_details";
+            PreparedStatement pstmt2 = con.prepareStatement(qry2);
+            ResultSet rs1 = pstmt2.executeQuery();
+
+            model.setRowCount(0);
+            while (rs1.next()) {
+                int rn = rs1.getInt("reg_number");
+                String name = rs1.getString("name");
+                String year = rs1.getString("year");
+                double cgpa = rs1.getDouble("cgpa");
+                String dept = rs1.getString("department");
+                String status = rs1.getString("status");
+                model.addRow(new Object[]{rn, name, year, cgpa, dept, status});
+            }
+            mainframe.repaint();
+            mainframe.revalidate();
+        }
+        catch (Exception ex){}
     }
 
     public void addData()
@@ -326,26 +330,39 @@ class Student
                         return;
                     }
 
-                    Class.forName("com.mysql.cj.jdbc.Driver");
-                    Connection con = DriverManager.getConnection(url, un, pw);
-                    String qry1 = "insert into student values (?,?,?,?,?,?)";
-                    PreparedStatement pstmt1 = con.prepareStatement(qry1);
-                    pstmt1.setInt(1, Integer.parseInt(strregno));
-                    pstmt1.setString(2, strname);
-                    pstmt1.setString(3, stryear);
-                    pstmt1.setDouble(4, Double.parseDouble(strcgpa));
-                    pstmt1.setString(5, strdept);
-                    pstmt1.setString(6, strstatus);
-                    int c1 = pstmt1.executeUpdate();
-                    JOptionPane.showMessageDialog(mainframe, "Added Successfully");
-                    txtrno.setText("");
-                    txtname.setText("");
-                    txtcgpa.setText("");
-                    txtdept.setText("");
-                    cbyr.setSelectedItem("Select");
-                    cbdh.setSelectedItem("Select");
+                    String json = String.format("""
+                        {
+                            "regNo" : "%d",
+                            "name" : "%s",
+                            "year" : "%s",
+                            "cgpa" : "%f",
+                            "department" : "%s",
+                            "status" : "%s"
+                        }
+                        """,Integer.parseInt(strregno),strname,stryear,Double.parseDouble(strcgpa),strdept,strstatus);
 
-                    printData();
+                    URL url = new URL("http://localhost:8081/studentDetails");
+                    HttpURLConnection con = (HttpURLConnection) url.openConnection();
+                    con.setRequestMethod("POST");
+                    con.setRequestProperty("Content-Type","application/json");
+                    con.setDoOutput(true);
+                    try (OutputStream os = con.getOutputStream()) {
+                        byte[] input = json.getBytes("utf-8");
+                        os.write(input, 0, input.length);
+                    }
+                    int code = con.getResponseCode();
+                    if (code == 200 || code == 201)
+                    {
+                        JOptionPane.showMessageDialog(mainframe,"Added Successfully");
+                        txtrno.setText(""); txtname.setText(""); txtcgpa.setText(""); txtdept.setText("");
+                        cbyr.setSelectedItem("Select");
+                        cbdh.setSelectedItem("Select");
+                        printData();
+                    }
+                    else
+                    {
+                        JOptionPane.showMessageDialog(mainframe,"Failed HTTP request code "+code);
+                    }
                 }
                 catch (Exception e) {}
             }
@@ -382,86 +399,104 @@ class Student
 
     public  void updateData()
     {
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                super.mouseClicked(e);
+                int row = table.getSelectedRow();
+                if (row != -1)
+                {
+                    txtrno.setText(model.getValueAt(row,0).toString());
+                    txtname.setText(model.getValueAt(row,1).toString());
+                    cbyr.setSelectedItem(model.getValueAt(row,2).toString());
+                    txtcgpa.setText(model.getValueAt(row,3).toString());
+                    txtdept.setText(model.getValueAt(row,4).toString());
+                    cbdh.setSelectedItem(model.getValueAt(row,5).toString());
+                }
+            }
+        });
+
         btnUpdate.addActionListener(new ActionListener()
         {
             public void actionPerformed(ActionEvent ae)
             {
-                lblurno.setVisible(true);
-                txturno.setVisible(true);
-                btnu.setVisible(true);
-                cbdata.setVisible(true);
-                lblftu.setVisible(true);
+                lblurno.setVisible(false);
+                txturno.setVisible(false);
+                btnu.setVisible(false);
+                cbdata.setVisible(false);
+                lblftu.setVisible(false);
                 lbldrno.setVisible(false);
                 txtdrno.setVisible(false);
                 btnd.setVisible(false);
 
-                cbdata.addActionListener(new ActionListener()
+                try
                 {
-                    public void actionPerformed(ActionEvent e)
-                    {
-                        c++;
-                        if (c!=1)
-                        {
-                            lblnewdata.setVisible(false);
-                            txtnewdata.setVisible(false);
-                        }
-                        String field = cbdata.getSelectedItem().toString();
-                        if (field.equals("Select"))
-                            JOptionPane.showMessageDialog(mainframe, "Choose the field to be updated");
-                        else {
-                            lblnewdata = new JLabel("New " + field);
-                            lblnewdata.setBounds(50, 550, 390, 40);
-                            lblnewdata.setFont(new Font("times new roman", Font.BOLD, 20));
-                            p1.add(lblnewdata);
+                    String strregno = txtrno.getText();
+                    String strname = txtname.getText();
+                    String stryear = cbyr.getSelectedItem().toString();
+                    String strcgpa = txtcgpa.getText();
+                    String strdept = txtdept.getText();
+                    String strstatus = cbdh.getSelectedItem().toString();
 
-                            txtnewdata = new JTextField();
-                            txtnewdata.setBounds(350, 550, 300, 40);
-                            txtnewdata.setFont(new Font("times new roman", Font.PLAIN, 20));
-                            p1.add(txtnewdata);
-
-                            p1.revalidate();
-                            p1.repaint();
-                        }
+                    if (strregno.isEmpty() || strname.isEmpty() || stryear.equals("Select") || strcgpa.isEmpty() || strdept.isEmpty() || strstatus.equals("Select")) {
+                        JOptionPane.showMessageDialog(mainframe, "All fields are mandatory");
+                        return;
                     }
-                });
-                btnu.addActionListener(new ActionListener()
-                {
-                    public void actionPerformed(ActionEvent e)
-                    {
-                        try
-                        {
-                            String str="";
-                            String data = cbdata.getSelectedItem().toString();
-                            if (data.equals("Register Number"))
-                                str+="register_number";
-                            else if (data.equals("Name"))
-                                str+="name";
-                            else if (data.equals("Year"))
-                                str+="year";
-                            else if (data.equals("CGPA"))
-                                str+="cgpa";
-                            else if (data.equals("Department"))
-                                str+="dept";
-                            else if (data.equals("Status"))
-                                str+="status";
-
-                            String updateregno = txturno.getText().toString();
-                            String newdata = txtnewdata.getText().toString();
-
-                            Class.forName("com.mysql.cj.jdbc.Driver");
-                            Connection con = DriverManager.getConnection(url,un,pw);
-                            String qry4 = "update student set "+str+" = ? where register_number = ?";
-                            PreparedStatement pstmt4 = con.prepareStatement(qry4);
-                            pstmt4.setString(1,newdata);
-                            pstmt4.setInt(2,Integer.parseInt(updateregno));
-                            int c4 = pstmt4.executeUpdate();
-                            JOptionPane.showMessageDialog(mainframe,"Updated Successfully");
-                            txtnewdata.setText("");txturno.setText("");cbdata.setSelectedItem("Select");
-                            printData();
-                        }
-                        catch (Exception ex){}
+                    if (strregno.length()!=9 || !isValidDigit(strregno)) {
+                        JOptionPane.showMessageDialog(mainframe, "Invalid Register Number");
+                        txtrno.setText("");
+                        return;
                     }
-                });
+                    if (strcgpa.length()>6 || !isValidCGPA(strcgpa)) {
+                        JOptionPane.showMessageDialog(mainframe, "Invalid CGPA");
+                        txtcgpa.setText("");
+                        return;
+                    }
+
+                    String json = String.format("""
+                        {
+                            "regNo" : "%d",
+                            "name" : "%s",
+                            "year" : "%s",
+                            "cgpa" : "%f",
+                            "department" : "%s",
+                            "status" : "%s"
+                        }
+                        """,Integer.parseInt(strregno),strname,stryear,Double.parseDouble(strcgpa),strdept,strstatus);
+
+                    URL url = new URL("http://localhost:8081/studentDetails");
+                    HttpURLConnection con = (HttpURLConnection) url.openConnection();
+                    con.setRequestMethod("PUT");
+                    con.setRequestProperty("Content-Type","application/json");
+                    con.setDoOutput(true);
+                    try (OutputStream os = con.getOutputStream()) {
+                        byte[] input = json.getBytes("utf-8");
+                        os.write(input, 0, input.length);
+                    }
+                    int code = con.getResponseCode();
+                    if (code == 200 || code == 201)
+                    {
+                        JOptionPane.showMessageDialog(mainframe,"Updated Successfully");
+                        txtrno.setText(""); txtname.setText(""); txtcgpa.setText(""); txtdept.setText("");
+                        cbyr.setSelectedItem("Select");
+                        cbdh.setSelectedItem("Select");
+                    }
+                    else
+                    {
+                        JOptionPane.showMessageDialog(mainframe,"Failed HTTP request code "+code);
+                    }
+                }
+                catch (Exception ex){}
+                finally {
+                    SwingUtilities.invokeLater(() -> {
+                        try{
+                            Thread.sleep(3000);
+                        }
+                        catch (Exception e){}
+                    });
+                    printData();
+                }
+
             }
         });
     }
@@ -491,19 +526,21 @@ class Student
                                 if (txtdrno.getText().toString().equals(""))
                                     JOptionPane.showMessageDialog(mainframe,"Register Number is mandatory");
                                 else {
-                                    Class.forName("com.mysql.cj.jdbc.Driver");
-                                    Connection con = DriverManager.getConnection(url, un, pw);
                                     int result = JOptionPane.showConfirmDialog(mainframe, "Are you sure? Deleted data cannot be retrieved");
                                     if (result == 0) {
-                                        String qry3 = "delete from student where register_number = ?";
-                                        PreparedStatement pstmt3 = con.prepareStatement(qry3);
-                                        pstmt3.setInt(1, Integer.parseInt(regno));
-                                        int c2 = pstmt3.executeUpdate();
-                                        if (c2 > 0)
-                                            JOptionPane.showMessageDialog(mainframe, "Deleted Successfully");
+                                        URL url = new URL("http://localhost:8081/studentDetails/"+regno);
+                                        HttpURLConnection con = (HttpURLConnection) url.openConnection();
+                                        con.setRequestMethod("DELETE");
+                                        int code = con.getResponseCode();
+                                        if (code == 200 || code == 201)
+                                        {
+                                            JOptionPane.showMessageDialog(mainframe,"Deleted successfully");
+                                            printData();
+                                        }
                                         else
-                                            JOptionPane.showMessageDialog(mainframe, "Register Number not found");
-                                        printData();
+                                        {
+                                            JOptionPane.showMessageDialog(mainframe,"Failed to delete HTTP code "+code);
+                                        }
                                         txtdrno.setText("");
                                     } else if (result == 1 || result == 2) {
                                         JOptionPane.showMessageDialog(mainframe, "Cancelled");
